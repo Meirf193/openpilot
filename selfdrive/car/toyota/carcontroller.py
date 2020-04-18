@@ -68,7 +68,6 @@ class CarController():
     # steer torque
     new_steer = int(round(actuators.steer * SteerLimitParams.STEER_MAX))
     apply_steer = apply_toyota_steer_torque_limits(new_steer, self.last_steer, CS.out.steeringTorqueEps, SteerLimitParams)
-    self.steer_rate_limited = new_steer != apply_steer
 
     # only cut torque when steer state is a known fault
     if CS.steer_state in [9, 25]:
@@ -80,6 +79,11 @@ class CarController():
       apply_steer_req = 0
     else:
       apply_steer_req = 1
+      if abs(CS.out.steeringRate) > 100:
+        apply_steer = 0
+        apply_steer_req = 0
+
+    self.steer_rate_limited = new_steer != apply_steer
 
     if not enabled and CS.pcm_acc_status:
       # send pcm acc cancel cmd if drive is disabled but pcm is still on, or if the system can't be activated
@@ -120,9 +124,9 @@ class CarController():
         can_sends.append(create_accel_command(self.packer, 0, pcm_cancel_cmd, False, lead))
 
     if (frame % 2 == 0) and (CS.CP.enableGasInterceptor):
-        # send exactly zero if apply_gas is zero. Interceptor will send the max between read value and apply_gas.
-        # This prevents unexpected pedal range rescaling
-        can_sends.append(create_gas_command(self.packer, apply_gas, frame//2))
+      # send exactly zero if apply_gas is zero. Interceptor will send the max between read value and apply_gas.
+      # This prevents unexpected pedal range rescaling
+      can_sends.append(create_gas_command(self.packer, apply_gas, frame//2))
 
     # ui mesg is at 100Hz but we send asap if:
     # - there is something to display
@@ -132,7 +136,7 @@ class CarController():
 
     send_ui = False
     if ((fcw_alert or steer_alert) and not self.alert_active) or \
-       (not (fcw_alert or steer_alert) and self.alert_active):
+            (not (fcw_alert or steer_alert) and self.alert_active):
       send_ui = True
       self.alert_active = not self.alert_active
     elif pcm_cancel_cmd:
